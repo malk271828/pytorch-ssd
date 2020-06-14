@@ -1,0 +1,26 @@
+name: SSD Project
+
+# conda_env: my_env.yaml
+# Can have a docker_env instead of a conda_env, e.g.
+# docker_env:
+#    image:  mlflow-docker-example
+
+# memo:
+# Do NOT use ~/ for specifying an absolute path.
+
+entry_points:
+  train:
+    parameters:
+      model_type: {type: str, default: "mb1-ssd"}
+      dataset_path1: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
+      dataset_path2: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2012/"}
+      epochs: {type: int, default: 200}
+    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net models/mobilenet_v1_with_relu_69_5.pth  --batch_size 24 --num_epochs 200 --scheduler cosine --lr 0.01 --t_max 200"
+
+  eval:
+    parameters:
+      model_type: {type: str, default: "mb1-ssd"}
+      model_path: {type: str, default: "models/mobilenet-v1-ssd-mp-0_675.pth"}
+      dataset_path: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
+      label_path: {type: str, default: "models/voc-model-labels.txt"}
+    command: "python eval_ssd.py --net {model_type} --dataset {dataset_path} --trained_model {model_path} --label_file {label_path}"
