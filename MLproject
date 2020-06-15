@@ -12,10 +12,15 @@ entry_points:
   train:
     parameters:
       model_type: {type: str, default: "mb1-ssd"}
+      base_net: {type: str, default: "models/mobilenet_v1_with_relu_69_5.pth"}
       dataset_path1: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
       dataset_path2: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2012/"}
-      epochs: {type: int, default: 200}
-    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net models/mobilenet_v1_with_relu_69_5.pth  --batch_size 24 --num_epochs 200 --scheduler cosine --lr 0.01 --t_max 200"
+      num_epochs: {type: int, default: 200}
+      lr: {type: float, default: 0.01}
+      batch_size: {type: int, default: 24}
+      t_max: {type: int, default: 200}
+      scheduler: {type: str, default: "cosine"}
+    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net {base_net}  --batch_size {batch_size} --num_epochs {num_epochs} --scheduler {scheduler} --lr {lr} --t_max {t_max}"
 
   eval:
     parameters:
