@@ -54,6 +54,8 @@ models, or with the provided sample models:
 import math
 import time
 import os
+import sys
+sys.path.insert(0, "../distiller/")
 import traceback
 import logging
 from collections import OrderedDict
@@ -76,10 +78,10 @@ from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 import operator
 
+from vision.nn.multibox_loss import MultiboxLoss
 
 # Logger handle
 msglogger = None
-
 
 def main():
     script_dir = os.path.dirname(__file__)
@@ -149,8 +151,9 @@ def main():
         args.exiterrors = []
 
     # Create the model
-    model = create_model(args.pretrained, args.dataset, args.arch,
+    model, config = create_model(args.pretrained, args.dataset, args.arch,
                          parallel=not args.load_serialized, device_ids=args.gpus)
+
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
@@ -184,7 +187,11 @@ def main():
             msglogger.info('\nreset_optimizer flag set: Overriding resumed optimizer and resetting epoch count to 0')
 
     # Define loss function (criterion)
-    criterion = nn.CrossEntropyLoss().to(args.device)
+    if "ssd" in args.arch:
+        criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
+                                center_variance=0.1, size_variance=0.2, device="cpu")
+    else:
+        criterion = nn.CrossEntropyLoss().to(args.device)
 
     if optimizer is None:
         optimizer = torch.optim.SGD(model.parameters(),
@@ -219,7 +226,7 @@ def main():
     # Load the datasets: the dataset to load is inferred from the model name passed
     # in args.arch.  The default dataset is ImageNet, but if args.arch contains the
     # substring "_cifar", then cifar10 is used.
-    train_loader, val_loader, test_loader, _ = load_data(args)
+    train_loader, val_loader, test_loader, _ = load_data(args, config=config)
     msglogger.info('Dataset sizes:\n\ttraining=%d\n\tvalidation=%d\n\ttest=%d',
                    len(train_loader.sampler), len(val_loader.sampler), len(test_loader.sampler))
 
@@ -274,6 +281,7 @@ def main():
             'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
             start_epoch, ending_epoch))
         raise ValueError('Epochs parameter is too low. Nothing to do.')
+
     for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
@@ -322,14 +330,15 @@ def main():
 
 
 OVERALL_LOSS_KEY = 'Overall Loss'
-OBJECTIVE_LOSS_KEY = 'Objective Loss'
-
+CLASSIFICATION_LOSS_KEY = 'Classification Loss'
+LOCALIZATION_LOSS_KEY = 'Localization Loss'
 
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
     losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter()),
-                          (OBJECTIVE_LOSS_KEY, tnt.AverageValueMeter())])
+                          (CLASSIFICATION_LOSS_KEY, tnt.AverageValueMeter()),
+                          (LOCALIZATION_LOSS_KEY, tnt.AverageValueMeter())])
 
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
@@ -351,30 +360,33 @@ def train(train_loader, model, criterion, optimizer, epoch,
     model.train()
     acc_stats = []
     end = time.time()
-    for train_step, (inputs, target) in enumerate(train_loader):
+    for train_step, (inputs, boxes, target) in enumerate(train_loader):
         # Measure data loading time
         data_time.add(time.time() - end)
-        inputs, target = inputs.to(args.device), target.to(args.device)
+        inputs, boxes, target = inputs.to(args.device), boxes.to(args.device), target.to(args.device)
 
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
         if not hasattr(args, 'kd_policy') or args.kd_policy is None:
-            output = model(inputs)
+            confidence, locations = model(inputs)
         else:
             output = args.kd_policy.forward(inputs)
 
         if not args.earlyexit_lossweights:
-            loss = criterion(output, target)
+            regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
+            loss = regression_loss + classification_loss
+
             # Measure accuracy
-            classerr.add(output.data, target)
-            acc_stats.append([classerr.value(1), classerr.value(5)])
+            # classerr.add(classification_loss.detach(), target)
+            # acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
         # Record loss
-        losses[OBJECTIVE_LOSS_KEY].add(loss.item())
+        losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
+        losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
@@ -722,12 +734,11 @@ def acts_histogram_collection(model, criterion, loggers, args):
                        classes=None, nbins=2048, save_hist_imgs=True)
 
 
-def load_data(args, fixed_subset=False):
+def load_data(args, fixed_subset=False, config=None):
     return apputils.load_data(args.dataset, os.path.expanduser(args.data), args.batch_size,
                               args.workers, args.validation_split, args.deterministic,
                               args.effective_train_size, args.effective_valid_size, args.effective_test_size,
-                              fixed_subset)
-
+                              fixed_subset, config=config)
 
 class missingdict(dict):
     """This is a little trick to prevent KeyError"""
