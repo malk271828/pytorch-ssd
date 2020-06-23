@@ -360,33 +360,48 @@ def train(train_loader, model, criterion, optimizer, epoch,
     model.train()
     acc_stats = []
     end = time.time()
-    for train_step, (inputs, boxes, target) in enumerate(train_loader):
+    for train_step, data in enumerate(train_loader):
+        # extract data
+        if len(data) == 3:
+            inputs, boxes, target = data
+            inputs, boxes, target = inputs.to(args.device), boxes.to(args.device), target.to(args.device)
+        else:
+            inputs, target = data
+            inputs, target = inputs.to(args.device), target.to(args.device)
+
         # Measure data loading time
         data_time.add(time.time() - end)
-        inputs, boxes, target = inputs.to(args.device), boxes.to(args.device), target.to(args.device)
 
         # Execute the forward phase, compute the output and measure loss
         if compression_scheduler:
             compression_scheduler.on_minibatch_begin(epoch, train_step, steps_per_epoch, optimizer)
 
         if not hasattr(args, 'kd_policy') or args.kd_policy is None:
-            confidence, locations = model(inputs)
+            if len(data) == 3:
+                confidence, locations = model(inputs)
+            else:
+                output = model(inputs)
         else:
             output = args.kd_policy.forward(inputs)
 
         if not args.earlyexit_lossweights:
-            regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
-            loss = regression_loss + classification_loss
+            if len(data) == 3:
+                regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
+                loss = regression_loss + classification_loss
+            else:
+                classification_loss = criterion(output, target)
+                loss = classification_loss
 
             # Measure accuracy
-            # classerr.add(classification_loss.detach(), target)
-            # acc_stats.append([classerr.value(1), classerr.value(5)])
+            classerr.add(output.detach(), target)
+            acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
         # Record loss
         losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
-        losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
+        if len(data) == 3:
+            losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
 
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
