@@ -393,7 +393,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 loss = classification_loss
 
             # Measure accuracy
-            classerr.add(output.detach(), target)
+            if len(data) == 3:
+                classerr.add(confidence.detach(), target)
+            else:
+                classerr.add(output.detach(), target)
             acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
