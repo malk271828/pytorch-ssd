@@ -77,6 +77,7 @@ import examples.automated_deep_compression as adc
 from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 import operator
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
 
 from vision.nn.multibox_loss import MultiboxLoss
 
@@ -281,12 +282,13 @@ def main():
             'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
             start_epoch, ending_epoch))
         raise ValueError('Epochs parameter is too low. Nothing to do.')
-    DEVICE = "cpu"
-    msglogger.info(f"Start training from epoch {ending_epoch + 1}.")
+
+    scheduler = CosineAnnealingLR(optimizer, 200, last_epoch=ending_epoch)
+    msglogger.info(f"Start training from epoch {start_epoch + 1}.")
     for epoch in range(start_epoch, ending_epoch):
         #scheduler.step()
         train2(train_loader, model, criterion, optimizer,
-              device=DEVICE, epoch=epoch)
+              device=args.device, epoch=epoch)
         
         # if epoch % args.validation_epochs == 0 or epoch == args.num_epochs - 1:
         #     val_loss, val_regression_loss, val_classification_loss = test2(val_loader, net, criterion, DEVICE)
