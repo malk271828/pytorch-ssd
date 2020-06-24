@@ -190,7 +190,7 @@ def main():
     # Define loss function (criterion)
     if "ssd" in args.arch:
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
-                                center_variance=0.1, size_variance=0.2, device="cpu")
+                                center_variance=0.1, size_variance=0.2, device=args.device)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
