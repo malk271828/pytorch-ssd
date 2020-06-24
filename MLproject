@@ -12,7 +12,7 @@ name: SSD Project
 # >>> mlflow run . --no-conda --entry-point <entry point>
 
 entry_points:
-  train:
+  train_mb1:
     parameters:
       model_type: {type: str, default: "mb1-ssd"}
       base_net: {type: str, default: "models/mobilenet_v1_with_relu_69_5.pth"}
@@ -24,6 +24,19 @@ entry_points:
       t_max: {type: int, default: 200}
       scheduler: {type: str, default: "cosine"}
     command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net {base_net}  --batch_size {batch_size} --num_epochs {num_epochs} --scheduler {scheduler} --lr {lr} --t_max {t_max}"
+
+  train_vgg:
+    parameters:
+      model_type: {type: str, default: "vgg16-ssd"}
+      base_net: {type: str, default: "models/vgg16_reducedfc.pth"}
+      dataset_path1: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
+      dataset_path2: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2012/"}
+      num_epochs: {type: int, default: 200}
+      lr: {type: float, default: 0.01}
+      batch_size: {type: int, default: 24}
+      milestones: {type: str, default: "120,160"}
+      scheduler: {type: str, default: "multi-step"}
+    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net {base_net}  --batch_size {batch_size} --num_epochs {num_epochs} --scheduler {scheduler} --lr {lr} --milestones {milestones}"
 
   eval:
     parameters:
@@ -70,7 +83,7 @@ entry_points:
       data_path: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
       num_epochs: {type: int, default: 180}
       lr: {type: float, default: 0.01}
-      batch-size: {type: int, default: 32}
+      batch-size: {type: int, default: 24}
       workers: {type: int, default: 0}
       load-serialized: {type: str, default: "--load-serialized"}
       compress_path: {type: str, default: "./vgg16_cifar_baseline_training.yaml"}
