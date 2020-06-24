@@ -391,13 +391,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
             else:
                 classification_loss = criterion(output, target)
                 loss = classification_loss
-
             # Measure accuracy
-            if len(data) == 3:
-                classerr.add(confidence.detach(), target)
-            else:
+            if len(data) != 3:
                 classerr.add(output.detach(), target)
-            acc_stats.append([classerr.value(1), classerr.value(5)])
+                acc_stats.append([classerr.value(1), classerr.value(5)])
         else:
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
@@ -438,8 +435,12 @@ def train(train_loader, model, criterion, optimizer, epoch,
             # Log some statistics
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
-                errs['Top1'] = classerr.value(1)
-                errs['Top5'] = classerr.value(5)
+                try:
+                    errs['Top1'] = classerr.value(1)
+                    errs['Top5'] = classerr.value(5)
+                except ZeroDivisionError:
+                    errs['Top1'] = 0
+                    errs['Top5'] = 0
             else:
                 # for Early Exit case, the Top1 and Top5 stats are computed for each exit.
                 for exitnum in range(args.num_exits):
@@ -487,7 +488,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
 
 def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     """Execute the validation/test loop."""
-    losses = {'objective_loss': tnt.AverageValueMeter()}
+    losses = {OVERALL_LOSS_KEY: tnt.AverageValueMeter()}
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
 
     if args.earlyexit_thresholds:
@@ -511,20 +512,37 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     model.eval()
 
     end = time.time()
-    for validation_step, (inputs, target) in enumerate(data_loader):
+    for validation_step, data in enumerate(data_loader):
         with torch.no_grad():
-            inputs, target = inputs.to(args.device), target.to(args.device)
+            # extract data
+            if len(data) == 3:
+                inputs, boxes, target = data
+                inputs, boxes, target = inputs.to(args.device), boxes.to(args.device), target.to(args.device)
+            else:
+                inputs, target = data
+                inputs, target = inputs.to(args.device), target.to(args.device)
+
             # compute output from model
-            output = model(inputs)
+            if len(data) == 3:
+                confidence, locations = model(inputs)
+            else:
+                output = model(inputs)
 
             if not args.earlyexit_thresholds:
                 # compute loss
-                loss = criterion(output, target)
+                if len(data) == 3:
+                    regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
+                    loss = regression_loss + classification_loss
+                else:
+                    classification_loss = criterion(output, target)
+                    loss = classification_loss
+
                 # measure accuracy and record loss
-                losses['objective_loss'].add(loss.item())
-                classerr.add(output.data, target)
-                if args.display_confusion:
-                    confusion.add(output.data, target)
+                losses[OVERALL_LOSS_KEY].add(loss.item())
+                if len(data) != 3:
+                    classerr.add(output.data, target)
+                    if args.display_confusion:
+                        confusion.add(output.data, target)
             else:
                 earlyexit_validate_loss(output, target, criterion, args)
 
@@ -535,10 +553,16 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
             steps_completed = (validation_step+1)
             if steps_completed % args.print_freq == 0:
                 if not args.earlyexit_thresholds:
-                    stats = ('',
-                            OrderedDict([('Loss', losses['objective_loss'].mean),
-                                         ('Top1', classerr.value(1)),
-                                         ('Top5', classerr.value(5))]))
+                    try:
+                        stats = ('',
+                                OrderedDict([('Loss', losses[OVERALL_LOSS_KEY].mean),
+                                            ('Top1', classerr.value(1)),
+                                            ('Top5', classerr.value(5))]))
+                    except ZeroDivisionError:
+                        stats = ('',
+                                OrderedDict([('Loss', losses[OVERALL_LOSS_KEY].mean),
+                                            ('Top1', 0),
+                                            ('Top5', 0)]))
                 else:
                     stats_dict = OrderedDict()
                     stats_dict['Test'] = validation_step
@@ -558,12 +582,18 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
     if not args.earlyexit_thresholds:
-        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
-                       classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
+        try:
+            msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
+                        classerr.value()[0], classerr.value()[1], losses[OVERALL_LOSS_KEY].mean)
+        except ZeroDivisionError:
+            pass
 
         if args.display_confusion:
             msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
-        return classerr.value(1), classerr.value(5), losses['objective_loss'].mean
+        try:
+            return classerr.value(1), classerr.value(5), losses[OVERALL_LOSS_KEY].mean
+        except ZeroDivisionError:
+            return 0, 0, losses[OVERALL_LOSS_KEY].mean
     else:
         total_top1, total_top5, losses_exits_stats = earlyexit_validate_stats(args)
         return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
