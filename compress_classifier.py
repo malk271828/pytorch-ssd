@@ -281,52 +281,86 @@ def main():
             'epoch count is too low, starting epoch is {} but total epochs set to {}'.format(
             start_epoch, ending_epoch))
         raise ValueError('Epochs parameter is too low. Nothing to do.')
-
+    DEVICE = "cpu"
+    msglogger.info(f"Start training from epoch {ending_epoch + 1}.")
     for epoch in range(start_epoch, ending_epoch):
-        # This is the main training loop.
-        msglogger.info('\n')
-        if compression_scheduler:
-            compression_scheduler.on_epoch_begin(epoch,
-                metrics=(vloss if (epoch != start_epoch) else 10**6))
+        #scheduler.step()
+        train2(train_loader, model, criterion, optimizer,
+              device=DEVICE, epoch=epoch)
+        
+        # if epoch % args.validation_epochs == 0 or epoch == args.num_epochs - 1:
+        #     val_loss, val_regression_loss, val_classification_loss = test2(val_loader, net, criterion, DEVICE)
+        #     msglogger.info(
+        #         f"Epoch: {epoch}, " +
+        #         f"Validation Loss: {val_loss:.4f}, " +
+        #         f"Validation Regression Loss {val_regression_loss:.4f}, " +
+        #         f"Validation Classification Loss: {val_classification_loss:.4f}"
+        #     )
+        #     model_path = os.path.join(args.checkpoint_folder, f"{args.net}-Epoch-{epoch}-Loss-{val_loss}.pth")
+        #     model.save(model_path)
+        #     msglogger.info(f"Saved model {model_path}")
 
-        # Train for one epoch
-        with collectors_context(activations_collectors["train"]) as collectors:
-            train(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-                  loggers=[tflogger, pylogger], args=args)
-            distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
-            distiller.log_activation_statsitics(epoch, "train", loggers=[tflogger],
-                                                collector=collectors["sparsity"])
-            if args.masks_sparsity:
-                msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
+def test2(loader, net, criterion, device):
+    net.eval()
+    running_loss = 0.0
+    running_regression_loss = 0.0
+    running_classification_loss = 0.0
+    num = 0
+    for _, data in enumerate(loader):
+        images, boxes, labels = data
+        images = images.to(device)
+        boxes = boxes.to(device)
+        labels = labels.to(device)
+        num += 1
 
-        # evaluate on validation set
-        with collectors_context(activations_collectors["valid"]) as collectors:
-            top1, top5, vloss = validate(val_loader, model, criterion, [pylogger], args, epoch)
-            distiller.log_activation_statsitics(epoch, "valid", loggers=[tflogger],
-                                                collector=collectors["sparsity"])
-            save_collectors_data(collectors, msglogger.logdir)
+        with torch.no_grad():
+            confidence, locations = net(images)
+            regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)
+            loss = regression_loss + classification_loss
 
-        stats = ('Performance/Validation/',
-                 OrderedDict([('Loss', vloss),
-                              ('Top1', top1),
-                              ('Top5', top5)]))
-        distiller.log_training_progress(stats, None, epoch, steps_completed=0, total_steps=1, log_freq=1,
-                                        loggers=[tflogger])
+        running_loss += loss.item()
+        running_regression_loss += regression_loss.item()
+        running_classification_loss += classification_loss.item()
+    return running_loss / num, running_regression_loss / num, running_classification_loss / num
 
-        if compression_scheduler:
-            compression_scheduler.on_epoch_end(epoch, optimizer)
 
-        # Update the list of top scores achieved so far, and save the checkpoint
-        update_training_scores_history(perf_scores_history, model, top1, top5, epoch, args.num_best_scores)
-        is_best = epoch == perf_scores_history[0].epoch
-        checkpoint_extras = {'current_top1': top1,
-                             'best_top1': perf_scores_history[0].top1,
-                             'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
-                                 extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
 
-    # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
+def train2(loader, net, criterion, optimizer, device, debug_steps=100, epoch=-1):
+    net.train(True)
+    running_loss = 0.0
+    running_regression_loss = 0.0
+    running_classification_loss = 0.0
+    for i, data in enumerate(loader):
+        images, boxes, labels = data
+        images = images.to(device)
+        boxes = boxes.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        confidence, locations = net(images)
+        regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)  # TODO CHANGE BOXES
+        loss = regression_loss + classification_loss
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+        running_regression_loss += regression_loss.item()
+        running_classification_loss += classification_loss.item()
+        if i and i % debug_steps == 0:
+            avg_loss = running_loss / debug_steps
+            avg_reg_loss = running_regression_loss / debug_steps
+            avg_clf_loss = running_classification_loss / debug_steps
+            logging.info(
+                f"Epoch: {epoch}, Step: {i}, " +
+                f"Average Loss: {avg_loss:.4f}, " +
+                f"Average Regression Loss {avg_reg_loss:.4f}, " +
+                f"Average Classification Loss: {avg_clf_loss:.4f}"
+            )
+            running_loss = 0.0
+            running_regression_loss = 0.0
+            running_classification_loss = 0.0
+
+
 
 
 OVERALL_LOSS_KEY = 'Overall Loss'
