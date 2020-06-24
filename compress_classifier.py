@@ -286,7 +286,7 @@ def main():
     scheduler = CosineAnnealingLR(optimizer, 200, last_epoch=ending_epoch)
     msglogger.info(f"Start training from epoch {start_epoch + 1}.")
     for epoch in range(start_epoch, ending_epoch):
-        #scheduler.step()
+        scheduler.step()
         train2(train_loader, model, criterion, optimizer,
               device=args.device, epoch=epoch)
         
