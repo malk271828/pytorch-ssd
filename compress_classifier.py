@@ -79,7 +79,32 @@ from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 import operator
 
+from torch.utils.data import DataLoader, ConcatDataset
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
+from vision.ssd.data_preprocessing import TrainAugmentation, TestTransform
+from vision.utils.misc import str2bool, Timer, freeze_net_layers, store_labels
+from vision.ssd.ssd import MatchPrior
+from vision.ssd.vgg_ssd import create_vgg_ssd
+from vision.ssd.mobilenetv1_ssd import create_mobilenetv1_ssd
+from vision.ssd.mobilenetv1_ssd_lite import create_mobilenetv1_ssd_lite
+from vision.ssd.mobilenet_v2_ssd_lite import create_mobilenetv2_ssd_lite
+from vision.ssd.squeezenet_ssd_lite import create_squeezenet_ssd_lite
+from vision.datasets.voc_dataset import VOCDataset
+from vision.datasets.open_images import OpenImagesDataset
 from vision.nn.multibox_loss import MultiboxLoss
+from vision.ssd.config import vgg_ssd_config
+from vision.ssd.config import mobilenetv1_ssd_config
+from vision.ssd.config import squeezenet_ssd_config
+
+
+# PyTorch 以外のRNGを初期化
+import numpy as np
+import random  
+seed = 0
+random.seed(seed)
+np.random.seed(seed)
+# PyTorch のRNGを初期化  
+torch.manual_seed(seed)
 
 # Logger handle
 msglogger = None
@@ -189,6 +214,7 @@ def main():
 
     # Define loss function (criterion)
     if "ssd" in args.arch:
+        print(config.priors.shape)
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
                                 center_variance=0.1, size_variance=0.2, device=args.device)
     else:
@@ -299,6 +325,42 @@ def main():
             start_epoch, ending_epoch))
         raise ValueError('Epochs parameter is too low. Nothing to do.')
 
+    del train_loader
+    del val_loader
+    train_transform = TrainAugmentation(config.image_size, config.image_mean, config.image_std)
+    target_transform = MatchPrior(config.priors, config.center_variance,
+                                  config.size_variance, 0.5)
+    test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
+    dataset1 = VOCDataset("/Users/tsuchiya/datasets/VOCdevkit/VOC2007/", transform=train_transform,
+                            target_transform=target_transform)
+    dataset2 = VOCDataset("/Users/tsuchiya/datasets/VOCdevkit/VOC2012/", transform=train_transform,
+                            target_transform=target_transform)
+    train_dataset = ConcatDataset([dataset1, dataset2])
+    train_loader = DataLoader(train_dataset, args.batch_size,
+                              num_workers=0,
+                              shuffle=False)
+    val_dataset = VOCDataset("/Users/tsuchiya/datasets/VOCdevkit/VOC2007/", transform=test_transform,
+                                target_transform=target_transform, is_test=True)
+    val_loader = DataLoader(val_dataset, args.batch_size,
+                            num_workers=0,
+                            shuffle=False)
+    scheduler = MultiStepLR(optimizer, milestones=[120,160], gamma=0.1, last_epoch=-1)
+
+    logging.info(f"Start training from epoch {start_epoch}.")
+    for epoch in range(start_epoch, ending_epoch):
+        scheduler.step()
+        train2(train_loader, model, criterion, optimizer,
+              device=args.device, debug_steps=100, epoch=epoch)
+        
+        if epoch % args.validation_epochs == 0 or epoch == args.num_epochs - 1:
+            val_loss, val_regression_loss, val_classification_loss = test2(val_loader, model, criterion, DEVICE)
+            logging.info(
+                f"Epoch: {epoch}, " +
+                f"Validation Loss: {val_loss:.4f}, " +
+                f"Validation Regression Loss {val_regression_loss:.4f}, " +
+                f"Validation Classification Loss: {val_classification_loss:.4f}"
+            )
+
     for epoch in range(start_epoch, ending_epoch):
         # This is the main training loop.
         msglogger.info('\n')
@@ -350,6 +412,67 @@ OVERALL_LOSS_KEY = 'Overall Loss'
 CLASSIFICATION_LOSS_KEY = 'Classification Loss'
 LOCALIZATION_LOSS_KEY = 'Localization Loss'
 
+def train2(loader, net, criterion, optimizer, device, debug_steps=100, epoch=-1):
+    net.train(True)
+    running_loss = 0.0
+    running_regression_loss = 0.0
+    running_classification_loss = 0.0
+    for i, data in enumerate(loader):
+        images, boxes, labels = data
+        images = images.to(device)
+        boxes = boxes.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        confidence, locations = net(images)
+        regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)  # TODO CHANGE BOXES
+        loss = regression_loss + classification_loss
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+        running_regression_loss += regression_loss.item()
+        running_classification_loss += classification_loss.item()
+        if True:
+            avg_loss = running_loss / debug_steps
+            avg_reg_loss = running_regression_loss / debug_steps
+            avg_clf_loss = running_classification_loss / debug_steps
+            logging.info(
+                f"Epoch: {epoch}, Step: {i}, " +
+                f"Average Loss: {avg_loss:.4f}, " +
+                f"Average Regression Loss {avg_reg_loss:.4f}, " +
+                f"Average Classification Loss: {avg_clf_loss:.4f}"
+            )
+            running_loss = 0.0
+            running_regression_loss = 0.0
+            running_classification_loss = 0.0
+
+
+def test2(loader, net, criterion, device):
+    net.eval()
+    running_loss = 0.0
+    running_regression_loss = 0.0
+    running_classification_loss = 0.0
+    num = 0
+    for _, data in enumerate(loader):
+        images, boxes, labels = data
+        images = images.to(device)
+        boxes = boxes.to(device)
+        labels = labels.to(device)
+        num += 1
+
+        with torch.no_grad():
+            confidence, locations = net(images)
+            regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)
+            loss = regression_loss + classification_loss
+
+        running_loss += loss.item()
+        running_regression_loss += regression_loss.item()
+        running_classification_loss += classification_loss.item()
+    return running_loss / num, running_regression_loss / num, running_classification_loss / num
+
+
+
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
@@ -385,6 +508,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
         else:
             inputs, target = data
             inputs, target = inputs.to(args.device), target.to(args.device)
+
+        print(train_step)
+        print(inputs.shape, boxes.shape, target.shape)
+        print(inputs[:,0])
+
 
         # Measure data loading time
         data_time.add(time.time() - end)
