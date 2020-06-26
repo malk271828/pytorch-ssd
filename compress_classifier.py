@@ -55,6 +55,7 @@ import math
 import time
 import os
 import sys
+import itertools
 sys.path.insert(0, "../distiller/")
 import traceback
 import logging
@@ -194,7 +195,23 @@ def main():
         criterion = nn.CrossEntropyLoss().to(args.device)
 
     if optimizer is None:
-        optimizer = torch.optim.SGD(model.parameters(),
+        if "ssd" in args.arch:
+            base_net_lr = args.lr
+            extra_layers_lr = args.lr
+            params = [
+                {'params': model.base_net.parameters(), 'lr': base_net_lr},
+                {'params': itertools.chain(
+                    model.source_layer_add_ons.parameters(),
+                    model.extras.parameters()
+                ), 'lr': extra_layers_lr},
+                {'params': itertools.chain(
+                    model.regression_headers.parameters(),
+                    model.classification_headers.parameters()
+                )}
+            ]
+        else:
+            params = model.parameters()
+        optimizer = torch.optim.SGD(params,
             lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
         msglogger.info('Optimizer Type: %s', type(optimizer))
         msglogger.info('Optimizer Args: %s', optimizer.defaults)

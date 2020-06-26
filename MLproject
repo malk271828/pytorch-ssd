@@ -32,11 +32,10 @@ entry_points:
       dataset_path1: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
       dataset_path2: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2012/"}
       num_epochs: {type: int, default: 200}
-      lr: {type: float, default: 0.01}
       batch_size: {type: int, default: 24}
       milestones: {type: str, default: "120,160"}
       scheduler: {type: str, default: "multi-step"}
-    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net {base_net}  --batch_size {batch_size} --num_epochs {num_epochs} --scheduler {scheduler} --lr {lr} --milestones {milestones}"
+    command: "python train_ssd.py --datasets {dataset_path1} {dataset_path2} --validation_dataset {dataset_path1} --net {model_type} --base_net {base_net}  --batch_size {batch_size} --num_epochs {num_epochs} --scheduler {scheduler} --milestones {milestones}"
 
   eval:
     parameters:
