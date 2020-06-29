@@ -278,7 +278,7 @@ def main():
 
     args.kd_policy = None
     if args.kd_teacher:
-        teacher = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, device_ids=args.gpus)
+        teacher, _ = create_model(args.kd_pretrained, args.dataset, args.kd_teacher, parallel=not args.load_serialized, device_ids=args.gpus)
         if args.kd_resume:
             teacher = apputils.load_lean_checkpoint(teacher, args.kd_resume)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
@@ -399,7 +399,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
             else:
                 output = model(inputs)
         else:
-            output = args.kd_policy.forward(inputs)
+            if len(data) == 3:
+                confidence, locations = args.kd_policy.forward(inputs)
+            else:
+                output = args.kd_policy.forward(inputs)
 
         if not args.earlyexit_lossweights:
             if len(data) == 3:
