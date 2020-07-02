@@ -64,7 +64,7 @@ entry_points:
   train_cifar:
     parameters:
       data_path: {type:str, default: "/Users/tsuchiya/datasets/data.cifar10/"}
-      num_epochs: {type: int, default: 180}
+      num_epochs: {type: int, default: 200}
       lr: {type: float, default: 0.01}
       batch-size: {type: int, default: 256}
       gpus: {type: int, default: 1}
@@ -74,7 +74,7 @@ entry_points:
   distill_cifar:
     parameters:
       data_path: {type: str, default: "/Users/tsuchiya/datasets/data.cifar10/"}
-      num_epochs: {type: int, default: 180}
+      num_epochs: {type: int, default: 200}
       lr: {type: float, default: 0.01}
       gpus: {type: int, default: 1}
       compress_path: {type: str, default: "./vgg16_cifar_baseline_training.yaml"}
@@ -86,7 +86,7 @@ entry_points:
     parameters:
       arch: {type: str, default: "vgg16-ssd"}
       data_path: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
-      num_epochs: {type: int, default: 180}
+      num_epochs: {type: int, default: 200}
       lr: {type: float, default: 0.001}
       batch-size: {type: int, default: 24}
       workers: {type: int, default: 0}
@@ -101,7 +101,7 @@ entry_points:
     parameters:
       arch: {type: str, default: "vgg16-ssd"}
       data_path: {type: str, default: "/Users/tsuchiya/datasets/VOCdevkit/VOC2007/"}
-      num_epochs: {type: int, default: 180}
+      num_epochs: {type: int, default: 200}
       lr: {type: float, default: 0.001}
       batch-size: {type: int, default: 24}
       workers: {type: int, default: 0}

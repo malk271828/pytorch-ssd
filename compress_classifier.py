@@ -79,6 +79,8 @@ from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 import operator
 
+from colorama import *
+init()
 from vision.nn.multibox_loss import MultiboxLoss
 
 # Logger handle
@@ -282,6 +284,10 @@ def main():
         if args.kd_resume:
             teacher = apputils.load_lean_checkpoint(teacher, args.kd_resume)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
+        raw_teacher_model_path = msglogger.logdir + "raw_teacher.pth.tar"
+        if not os.path.exists(raw_teacher_model_path):
+            model.save(raw_teacher_model_path)
+            msglogger.info(Fore.CYAN + '\tRaw Teacher Model saved: {0}'.format(args.kd_teacher) + Style.RESET_ALL)
         args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
                                          frequency=1)
