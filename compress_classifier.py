@@ -284,11 +284,11 @@ def main():
         if args.kd_resume:
             teacher = apputils.load_lean_checkpoint(teacher, args.kd_resume)
         dlw = distiller.DistillationLossWeights(args.kd_distill_wt, args.kd_student_wt, args.kd_teacher_wt)
-        raw_teacher_model_path = msglogger.logdir + "raw_teacher.pth.tar"
+        raw_teacher_model_path = msglogger.logdir + "/raw_teacher.pth.tar"
         if not os.path.exists(raw_teacher_model_path):
             teacher.save(raw_teacher_model_path)
             msglogger.info(Fore.CYAN + '\tRaw Teacher Model saved: {0}'.format(raw_teacher_model_path) + Style.RESET_ALL)
-        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw)
+        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw, loss_type=args.loss_type)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
                                          frequency=1)
 
