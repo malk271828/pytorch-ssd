@@ -57,6 +57,7 @@ import os
 import sys
 import itertools
 sys.path.insert(0, "../distiller/")
+sys.path.insert(0, "../pytorch-toolbelt/")
 import traceback
 import logging
 from collections import OrderedDict
