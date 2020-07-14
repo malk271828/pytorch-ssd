@@ -8,7 +8,7 @@ from ..utils import box_utils
 
 class MultiboxLoss(nn.Module):
     def __init__(self, priors, iou_threshold, neg_pos_ratio,
-                 center_variance, size_variance, device):
+                 center_variance, size_variance, device, reduction="sum"):
         """Implement SSD Multibox Loss.
 
         Basically, Multibox loss combines classification loss
@@ -21,6 +21,7 @@ class MultiboxLoss(nn.Module):
         self.size_variance = size_variance
         self.priors = priors
         self.priors.to(device)
+        self.reduction = reduction
 
     def forward(self, confidence, predicted_locations, labels, gt_locations):
         """Compute classification loss and smooth l1 loss.
@@ -35,13 +36,19 @@ class MultiboxLoss(nn.Module):
         with torch.no_grad():
             # derived from cross_entropy=sum(log(p))
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
-            mask = box_utils.hard_negative_mining(loss, labels, self.neg_pos_ratio)
+            if self.neg_pos_ratio == -1:
+                mask = torch.ones(confidence.shape[:2], dtype=torch.uint8)
+            else:
+                mask = box_utils.hard_negative_mining(loss, labels, self.neg_pos_ratio)
 
         confidence = confidence[mask, :]
-        classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], size_average=False)
-        pos_mask = labels > 0
+        classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], reduction=self.reduction)
+        if self.neg_pos_ratio == -1:
+            pos_mask = torch.ones(predicted_locations.shape[:2], dtype=torch.uint8)
+        else:
+            pos_mask = labels > 0
         predicted_locations = predicted_locations[pos_mask, :].reshape(-1, 4)
         gt_locations = gt_locations[pos_mask, :].reshape(-1, 4)
-        smooth_l1_loss = F.smooth_l1_loss(predicted_locations, gt_locations, size_average=False)
+        smooth_l1_loss = F.smooth_l1_loss(predicted_locations, gt_locations, reduction=self.reduction)
         num_pos = gt_locations.size(0)
         return smooth_l1_loss/num_pos, classification_loss/num_pos
