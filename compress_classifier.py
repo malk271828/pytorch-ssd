@@ -80,6 +80,7 @@ from distiller.models import ALL_MODEL_NAMES, create_model
 import parser
 import operator
 
+import mlflow
 from colorama import *
 init()
 from vision.nn.multibox_loss import MultiboxLoss
@@ -427,8 +428,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
             loss = earlyexit_loss(output, target, criterion, args)
         # Record loss
         losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
+        mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.item(), step=epoch)
         if len(data) == 3:
             losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
+            mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.item(), step=epoch)
 
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
@@ -437,6 +440,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                                                   optimizer=optimizer, return_loss_components=True)
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
+            mlflow.log_metric(key=OVERALL_LOSS_KEY, value=loss.item(), step=epoch)
 
             for lc in agg_loss.loss_components:
                 if lc.name not in losses:
