@@ -437,7 +437,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
             # Before running the backward phase, we allow the scheduler to modify the loss
             # (e.g. add regularization loss)
             if len(data) == 3:
-                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(confidence, target),
+                num_class = confidence.shape[2]
+                one_hot_target = torch.eye(num_class)[target].to(args.device)
+                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=one_hot_target,
                                                                     optimizer=optimizer, return_loss_components=True)
             else:
                 agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=loss,
