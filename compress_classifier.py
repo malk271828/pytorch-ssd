@@ -436,8 +436,12 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
             # (e.g. add regularization loss)
-            agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss,
-                                                                  optimizer=optimizer, return_loss_components=True)
+            if len(data) == 3:
+                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(confidence, target),
+                                                                    optimizer=optimizer, return_loss_components=True)
+            else:
+                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=loss,
+                                                                    optimizer=optimizer, return_loss_components=True)                
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
             mlflow.log_metric(key=OVERALL_LOSS_KEY, value=loss.item(), step=epoch)
