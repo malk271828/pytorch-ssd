@@ -436,15 +436,17 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Record loss
         if args.loss_type == "Focal":
             losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.sum().item())
+            mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.sum().item(), step=epoch)
         else:
             losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
-        mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.item(), step=epoch)
+            mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.item(), step=epoch)
         if len(data) == 3:
             if args.loss_type == "Focal":
                 losses[LOCALIZATION_LOSS_KEY].add(regression_loss.sum().item())
+                mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.sum().item(), step=epoch)
             else:
                 losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
-            mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.item(), step=epoch)
+                mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.item(), step=epoch)
 
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
