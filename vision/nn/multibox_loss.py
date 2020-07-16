@@ -22,6 +22,7 @@ class MultiboxLoss(nn.Module):
         self.priors = priors
         self.priors.to(device)
         self.reduction = reduction
+        self.device = device
 
     def forward(self, confidence, predicted_locations, labels, gt_locations):
         """Compute classification loss and smooth l1 loss.
@@ -36,13 +37,14 @@ class MultiboxLoss(nn.Module):
         with torch.no_grad():
             # derived from cross_entropy=sum(log(p))
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
-            if self.neg_pos_ratio == -1:
-                mask = torch.ones(confidence.shape[:2], dtype=torch.uint8)
-            else:
+            if self.neg_pos_ratio != -1:
                 mask = box_utils.hard_negative_mining(loss, labels, self.neg_pos_ratio)
-
-        confidence = confidence[mask, :]
-        classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], reduction=self.reduction)
+                confidence = confidence[mask, :]
+        if self.reduction == "none":
+            one_hot_label = torch.eye(num_classes)[labels].to(self.device)
+            classification_loss = F.binary_cross_entropy_with_logits(confidence, one_hot_label, reduction=self.reduction)
+        else:
+            classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], reduction=self.reduction)
         if self.neg_pos_ratio == -1:
             pos_mask = torch.ones(predicted_locations.shape[:2], dtype=torch.uint8)
         else:

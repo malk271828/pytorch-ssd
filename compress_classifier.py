@@ -195,9 +195,11 @@ def main():
     if "ssd" in args.arch:
         if args.loss_type == "Focal":
             reduction = "none"
+            neg_pos_ratio = -1
         else:
             reduction = "sum"
-        criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
+            neg_pos_ratio = 3
+        criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=neg_pos_ratio,
                                 center_variance=0.1, size_variance=0.2, device=args.device, reduction=reduction)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
@@ -454,7 +456,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             if len(data) == 3 and args.loss_type=="Focal":
                 # num_class = confidence.shape[2]
                 # one_hot_target = torch.eye(num_class)[target].to(args.device)
-                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=classification_loss,
+                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(loss, classification_loss),
                                                                     optimizer=optimizer, return_loss_components=True)
             else:
                 agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=loss,
