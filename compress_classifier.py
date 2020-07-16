@@ -193,8 +193,12 @@ def main():
 
     # Define loss function (criterion)
     if "ssd" in args.arch:
+        if args.loss_type == "Focal":
+            reduction = "none"
+        else:
+            reduction = "sum"
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
-                                center_variance=0.1, size_variance=0.2, device=args.device)
+                                center_variance=0.1, size_variance=0.2, device=args.device, reduction=reduction)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
@@ -415,7 +419,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if not args.earlyexit_lossweights:
             if len(data) == 3:
                 regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
-                loss = regression_loss + classification_loss
+                if args.loss_type == "Focal":
+                    loss = regression_loss.sum() + classification_loss.sum()
+                else:
+                    loss = regression_loss + classification_loss
             else:
                 classification_loss = criterion(output, target)
                 loss = classification_loss
@@ -427,10 +434,16 @@ def train(train_loader, model, criterion, optimizer, epoch,
             # Measure accuracy and record loss
             loss = earlyexit_loss(output, target, criterion, args)
         # Record loss
-        losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
+        if args.loss_type == "Focal":
+            losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.sum().item())
+        else:
+            losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
         mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.item(), step=epoch)
         if len(data) == 3:
-            losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
+            if args.loss_type == "Focal":
+                losses[LOCALIZATION_LOSS_KEY].add(regression_loss.sum().item())
+            else:
+                losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
             mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.item(), step=epoch)
 
         if compression_scheduler:
