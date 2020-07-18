@@ -450,7 +450,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                                                     optimizer=optimizer, return_loss_components=True)                
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
-            mlflow.log_metric(key=OVERALL_LOSS_KEY, value=loss.item(), step=epoch)
 
             # Recored loss which is related to a compression scheduler
             for lc in agg_loss.loss_components:
@@ -463,11 +462,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # Record loss
         if args.loss_type != "Focal":
             losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
-            mlflow.log_metric(key=CLASSIFICATION_LOSS_KEY, value=classification_loss.item(), step=epoch)
         if len(data) == 3:
             if args.loss_type != "Focal":
                 losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
-                mlflow.log_metric(key=LOCALIZATION_LOSS_KEY, value=regression_loss.item(), step=epoch)
 
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
@@ -501,6 +498,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             stats_dict = OrderedDict()
             for loss_name, meter in losses.items():
                 stats_dict[loss_name] = meter.mean
+                mlflow.log_metric(key=loss_name, value=meter.mean, step=epoch)
             stats_dict.update(errs)
             stats_dict['LR'] = optimizer.param_groups[0]['lr']
             stats_dict['Time'] = batch_time.mean
@@ -583,7 +581,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
                 # compute loss
                 if len(data) == 3:
                     regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
-                    loss = regression_loss + classification_loss
+                    if args.loss_type == "Focal":
+                        loss = regression_loss.sum() + classification_loss.sum()
+                    else:
+                        loss = regression_loss + classification_loss
                 else:
                     classification_loss = criterion(output, target)
                     loss = classification_loss
