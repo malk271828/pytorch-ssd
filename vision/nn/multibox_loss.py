@@ -9,7 +9,10 @@ from ..utils import box_utils
 
 class MultiboxLoss(nn.Module):
     def __init__(self, priors, iou_threshold, neg_pos_ratio,
-                 center_variance, size_variance, device, reduction="sum", binary=False):
+                 center_variance, size_variance, device,
+                 reduction:str = "sum",
+                 binary:bool = False,
+                 verbose:int = 0):
         """Implement SSD Multibox Loss.
 
         Basically, Multibox loss combines classification loss
@@ -25,7 +28,7 @@ class MultiboxLoss(nn.Module):
         self.reduction = reduction
         self.device = device
         self.binary = binary
-        self.verbose = 1
+        self.verbose = verbose
 
     def forward(self, confidence, predicted_locations, labels, gt_locations):
         """Compute classification loss and smooth l1 loss.
