@@ -200,7 +200,7 @@ def main():
             reduction = "sum"
             neg_pos_ratio = 3
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=neg_pos_ratio,
-                                center_variance=0.1, size_variance=0.2, device=args.device, reduction=reduction)
+                                center_variance=0.1, size_variance=0.2, device=args.device, reduction=reduction, verbose=0)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
@@ -367,10 +367,10 @@ LOCALIZATION_LOSS_KEY = 'Localization Loss'
 def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
-    losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter()),
-                        #   (CLASSIFICATION_LOSS_KEY, tnt.AverageValueMeter()),
-                        #   (LOCALIZATION_LOSS_KEY, tnt.AverageValueMeter())
-                          ])
+    losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter())])
+    if args.loss_type == "KL":
+        losses[CLASSIFICATION_LOSS_KEY] = tnt.AverageValueMeter()
+        losses[LOCALIZATION_LOSS_KEY] = tnt.AverageValueMeter()
 
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
     batch_time = tnt.AverageValueMeter()
