@@ -59,8 +59,7 @@ class MultiboxLoss(nn.Module):
                 # https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
                 # compute cross entropy by-hand
                 one_hot_label = torch.eye(num_classes)[labels].to(self.device)
-                xt = confidence * (2 * one_hot_label - 1)
-                classification_loss = (2 * xt + 1).sigmoid()
+                classification_loss = - one_hot_label * F.log_softmax(confidence)
 
         if self.neg_pos_ratio == -1:
             pos_mask = torch.ones(predicted_locations.shape[:2], dtype=torch.uint8)
@@ -73,8 +72,8 @@ class MultiboxLoss(nn.Module):
 
         if self.verbose > 0:
             print("num_pos:{0}".format(num_pos))
-            print("smooth_l1_loss shape:{0} mean:{1} range:[{2}, {3}]".format(smooth_l1_loss.shape, smooth_l1_loss.sum()/num_pos, torch.min(smooth_l1_loss), torch.max(smooth_l1_loss)))
-            print("classification_loss shape:{0} mean:{1} range:[{2}, {3}]".format(classification_loss.shape, classification_loss.sum()/num_pos, torch.min(classification_loss), torch.max(classification_loss)))
+            print("smooth_l1_loss shape:{0} batch mean:{1} range:[{2}, {3}]".format(smooth_l1_loss.shape, smooth_l1_loss.sum()/num_pos, torch.min(smooth_l1_loss), torch.max(smooth_l1_loss)))
+            print("classification_loss shape:{0} batch mean:{1} range:[{2}, {3}]".format(classification_loss.shape, classification_loss.sum()/num_pos, torch.min(classification_loss), torch.max(classification_loss)))
             print(Fore.CYAN + "MultiboxLoss.forward [out] -------------------------" + Style.RESET_ALL)
 
         return smooth_l1_loss/num_pos, classification_loss/num_pos
