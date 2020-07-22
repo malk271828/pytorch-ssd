@@ -51,7 +51,8 @@ class MultiboxLoss(nn.Module):
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
             if self.neg_pos_ratio != -1:
                 mask = box_utils.hard_negative_mining(loss, labels, self.neg_pos_ratio)
-                confidence = confidence[mask, :]
+        if self.neg_pos_ratio != -1:
+            confidence = confidence[mask, :]
         if self.binary:
             one_hot_label = torch.eye(num_classes)[labels].to(self.device)
             classification_loss = F.binary_cross_entropy_with_logits(confidence, one_hot_label, reduction=self.reduction)
