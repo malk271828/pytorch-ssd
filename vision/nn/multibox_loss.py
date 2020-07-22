@@ -46,6 +46,7 @@ class MultiboxLoss(nn.Module):
             print(Fore.CYAN + "MultiboxLoss.forward [in] -------------------------" + Style.RESET_ALL)
 
         num_classes = confidence.size(2)
+        batch_size = confidence.size(0)
         with torch.no_grad():
             # derived from cross_entropy=sum(log(p))
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
@@ -57,14 +58,15 @@ class MultiboxLoss(nn.Module):
             one_hot_label = torch.eye(num_classes)[labels].to(self.device)
             classification_loss = F.binary_cross_entropy_with_logits(confidence, one_hot_label, reduction=self.reduction)
         else:
-            if self.neg_pos_ratio != -1:
-                classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], reduction=self.reduction)
+            if self.neg_pos_ratio == -1:
+                classification_loss = F.cross_entropy(confidence.reshape(org_shape), labels[mask], reduction=self.reduction)
             else:
                 # https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
                 # compute cross entropy by-hand
-                one_hot_label = torch.eye(num_classes)[labels].to(self.device)
-                log_pr_confidence = F.log_softmax(confidence, dim=2)
+                one_hot_label = torch.eye(num_classes)[labels[mask]].to(self.device)
+                log_pr_confidence = F.log_softmax(confidence.reshape(-1, num_classes), dim=1)
                 classification_loss = - one_hot_label * log_pr_confidence
+                classification_loss = classification_loss.sum()
 
         if self.neg_pos_ratio == -1:
             pos_mask = torch.ones(predicted_locations.shape[:2], dtype=torch.uint8)
