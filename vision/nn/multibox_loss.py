@@ -63,7 +63,7 @@ class MultiboxLoss(nn.Module):
                 # https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
                 # compute cross entropy by-hand
                 one_hot_label = torch.eye(num_classes)[labels].to(self.device)
-                log_pr_confidence = F.log_softmax(confidence)
+                log_pr_confidence = F.log_softmax(confidence, dim=2)
                 classification_loss = - one_hot_label * log_pr_confidence
 
         if self.neg_pos_ratio == -1:
