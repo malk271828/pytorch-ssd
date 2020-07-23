@@ -60,11 +60,7 @@ class MultiboxLoss(nn.Module):
             if self.neg_pos_ratio != -1:
                 classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], reduction=self.reduction)
             else:
-                # https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
-                # compute cross entropy by-hand
-                one_hot_label = torch.eye(num_classes)[labels].to(self.device)
-                log_pr_confidence = F.log_softmax(confidence, dim=2)
-                classification_loss = - one_hot_label * log_pr_confidence
+                classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels.flatten(), reduction=self.reduction)
 
         if self.neg_pos_ratio == -1:
             pos_mask = torch.ones(predicted_locations.shape[:2], dtype=torch.uint8)
@@ -77,8 +73,6 @@ class MultiboxLoss(nn.Module):
 
         if self.verbose > 0:
             print("num_pos:{0}".format(num_pos))
-            if self.neg_pos_ratio == -1:
-                print("log_pr_confidence shape:{0} batch mean:{1} range:[{2}, {3}]".format(log_pr_confidence.shape, log_pr_confidence.sum()/num_pos, torch.min(log_pr_confidence), torch.max(log_pr_confidence)))
             print("smooth_l1_loss shape:{0} batch mean:{1} range:[{2}, {3}]".format(smooth_l1_loss.shape, smooth_l1_loss.sum()/num_pos, torch.min(smooth_l1_loss), torch.max(smooth_l1_loss)))
             print("classification_loss shape:{0} batch mean:{1} range:[{2}, {3}]".format(classification_loss.shape, classification_loss.sum()/num_pos, torch.min(classification_loss), torch.max(classification_loss)))
             print(Fore.CYAN + "MultiboxLoss.forward [out] -------------------------" + Style.RESET_ALL)
