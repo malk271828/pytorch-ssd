@@ -195,12 +195,13 @@ def main():
     if "ssd" in args.arch:
         if args.loss_type == "Focal":
             reduction = "none"
-            neg_pos_ratio = -1
+            neg_pos_ratio = 3
         else:
             reduction = "sum"
             neg_pos_ratio = 3
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=neg_pos_ratio,
-                                center_variance=0.1, size_variance=0.2, device=args.device, reduction=reduction, verbose=0)
+                                center_variance=0.1, size_variance=0.2, device=args.device,
+                                reduction=reduction, class_reduction=False, verbose=1)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
