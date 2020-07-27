@@ -201,7 +201,7 @@ def main():
             neg_pos_ratio = 3
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=neg_pos_ratio,
                                 center_variance=0.1, size_variance=0.2, device=args.device,
-                                reduction=reduction, class_reduction=False, verbose=1)
+                                reduction=reduction, class_reduction=False, verbose=0)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
@@ -297,7 +297,7 @@ def main():
         if not os.path.exists(raw_teacher_model_path):
             teacher.save(raw_teacher_model_path)
             msglogger.info(Fore.CYAN + '\tRaw Teacher Model saved: {0}'.format(raw_teacher_model_path) + Style.RESET_ALL)
-        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw, loss_type=args.loss_type, verbose=2)
+        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw, loss_type=args.loss_type, verbose=0)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
                                          frequency=1)
 
