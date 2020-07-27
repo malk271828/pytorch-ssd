@@ -82,7 +82,7 @@ entry_points:
       gpus: {type: int, default: 1}
       load-serialized: {type: str, default: "--load-serialized"}
       compress_path: {type: str, default: "./ssd_baseline_training.yaml"}
-    command: "python compress_classifier.py --arch {arch} {data_path} -p=50 --lr={lr} --epochs={num_epochs} --compress={compress_path}
+    command: "python compress_classifier.py --arch {arch} {data_path} -p=1 --lr={lr} --epochs={num_epochs} --compress={compress_path}
               -j={workers} --deterministic --batch-size {batch-size} {load-serialized} --pretrained --seed {seed} --gpus {gpus}"
 
   distill_ssd:
@@ -100,10 +100,10 @@ entry_points:
       compress_path: {type: str, default: "./ssd_baseline_training.yaml"}
       #teacher_checkpoint_path: {type: str, default: "logs/2020.06.28-164559/best.pth.tar"}
       teacher_checkpoint_path: {type: str, default: "logs/2020.07.06-162401/best.pth.tar"}
-      temparature: {type: int, default: 5.0}
-      loss_type: {type: str, default: "KL"}
+      temparature: {type: int, default: 1.0}
+      loss_type: {type: str, default: "Focal"}
       distillation_weight: {type: float, default: "0.7"}
       student_weight: {type: float, default: "0.3"}
-    command: "python compress_classifier.py --arch {arch} {data_path} -p=50 --lr={lr} --epochs={num_epochs} --compress={compress_path}
+    command: "python compress_classifier.py --arch {arch} {data_path} -p=1 --lr={lr} --epochs={num_epochs} --compress={compress_path}
               -j={workers} --deterministic --batch-size {batch-size} {load-serialized} --pretrained --seed {seed}
               --kd-teacher {arch} --kd-resume {teacher_checkpoint_path} --kd-temp {temparature} --kd-dw {distillation_weight} --kd-sw {student_weight} --gpus {gpus} --kd-loss_type {loss_type}"
