@@ -193,15 +193,10 @@ def main():
 
     # Define loss function (criterion)
     if "ssd" in args.arch:
-        if args.loss_type == "Focal":
-            reduction = "none"
-            neg_pos_ratio = 3
-        else:
-            reduction = "sum"
-            neg_pos_ratio = 3
+        neg_pos_ratio = 3
         criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=neg_pos_ratio,
                                 center_variance=0.1, size_variance=0.2, device=args.device,
-                                reduction=reduction, class_reduction=False, verbose=0)
+                                reduction="sum", class_reduction=True, verbose=1)
     else:
         criterion = nn.CrossEntropyLoss().to(args.device)
 
@@ -297,7 +292,7 @@ def main():
         if not os.path.exists(raw_teacher_model_path):
             teacher.save(raw_teacher_model_path)
             msglogger.info(Fore.CYAN + '\tRaw Teacher Model saved: {0}'.format(raw_teacher_model_path) + Style.RESET_ALL)
-        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw, loss_type=args.loss_type, verbose=1)
+        args.kd_policy = distiller.KnowledgeDistillationPolicy(model, teacher, args.kd_temp, dlw, loss_type=args.kd_loss_type, verbose=1)
         compression_scheduler.add_policy(args.kd_policy, starting_epoch=args.kd_start_epoch, ending_epoch=args.epochs,
                                          frequency=1)
 
@@ -369,7 +364,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
           compression_scheduler, loggers, args):
     """Training loop for one epoch."""
     losses = OrderedDict([(OVERALL_LOSS_KEY, tnt.AverageValueMeter())])
-    if args.loss_type == "KL":
+    if args.kd_loss_type == "KL":
         losses[CLASSIFICATION_LOSS_KEY] = tnt.AverageValueMeter()
         losses[LOCALIZATION_LOSS_KEY] = tnt.AverageValueMeter()
 
@@ -423,7 +418,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if not args.earlyexit_lossweights:
             if len(data) == 3:
                 regression_loss, classification_loss = criterion(confidence, locations, target, boxes)  # TODO CHANGE BOXES
-                if args.loss_type == "Focal":
+                if len(classification_loss.shape) > 1:
                     loss = regression_loss.sum() + classification_loss.sum()
                 else:
                     loss = regression_loss + classification_loss
@@ -441,14 +436,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if compression_scheduler:
             # Before running the backward phase, we allow the scheduler to modify the loss
             # (e.g. add regularization loss)
-            if len(data) == 3 and args.loss_type=="Focal":
-                # num_class = confidence.shape[2]
-                # one_hot_target = torch.eye(num_class)[target].to(args.device)
-                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(regression_loss, classification_loss),
-                                                                    optimizer=optimizer, return_loss_components=True)
-            else:
-                agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=loss,
-                                                                    optimizer=optimizer, return_loss_components=True)                
+            agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(regression_loss, classification_loss),
+                                                                optimizer=optimizer, return_loss_components=True)
             loss = agg_loss.overall_loss
             losses[OVERALL_LOSS_KEY].add(loss.item())
 
@@ -459,13 +448,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 losses[lc.name].add(lc.value.item())
         else:
             losses[OVERALL_LOSS_KEY].add(loss.item())
-
-        # Record loss
-        if args.loss_type != "Focal":
-            losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
-        if len(data) == 3:
-            if args.loss_type != "Focal":
-                losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
 
         # Compute the gradient and do SGD step
         optimizer.zero_grad()
