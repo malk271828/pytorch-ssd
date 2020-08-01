@@ -86,6 +86,7 @@ class MultiboxLoss(nn.Module):
             confidence = confidence[mask, :]
 
         if self.num_classes == 2:
+            # binary-class classfication
             one_hot_label = torch.eye(self.num_classes, dtype=torch.long)[labels].to(self.device)
             classification_loss = F.binary_cross_entropy_with_logits(confidence, one_hot_label, reduction=self.reduction)
         else:
@@ -93,7 +94,7 @@ class MultiboxLoss(nn.Module):
             if self.neg_pos_ratio is not None:
                 # Online hard example mining
                 if self.verbose > 0:
-                    print("Online Hard Example Mining")
+                    print("Online Hard Example Mining (ratio: {0})".format(self.neg_pos_ratio))
                 # smooth_l1_loss shape:torch.Size([407, 4]) batch mean:3.170289993286133 range:[3.635753387243312e-08, 7.234347343444824]
                 # classification_loss shape:torch.Size([1628]) batch mean:1.1413660049438477 range:[1.510108232498169, 12.064205169677734]
                 classification_loss = F.cross_entropy(confidence.reshape(-1, self.num_classes), labels[mask], reduction=self.reduction)
@@ -102,7 +103,6 @@ class MultiboxLoss(nn.Module):
                 predicted_locations = predicted_locations[pos_mask, :].reshape(-1, 4)
                 gt_locations = gt_locations[pos_mask, :].reshape(-1, 4)
                 smooth_l1_loss = F.smooth_l1_loss(predicted_locations, gt_locations, reduction=self.reduction)
-
             else:
                 # Focal loss
                 if self.verbose > 0:
