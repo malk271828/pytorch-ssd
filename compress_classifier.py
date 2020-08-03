@@ -352,6 +352,7 @@ def main():
                              'best_epoch': perf_scores_history[0].epoch}
         apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
                                  extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
+        mlflow.log_artifacts(msglogger.logdir)
 
     # Finally run results on the test set
     test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
