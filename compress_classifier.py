@@ -350,13 +350,22 @@ def main():
         checkpoint_extras = {'current_top1': top1,
                              'best_top1': perf_scores_history[0].top1,
                              'best_epoch': perf_scores_history[0].epoch}
-        apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
-                                 extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
+        try:
+            raw_fullpath_best = apputils.save_checkpoint(epoch, args.arch, model, optimizer=optimizer, scheduler=compression_scheduler,
+                                    extras=checkpoint_extras, is_best=is_best, name=args.name, dir=msglogger.logdir)
+        except Exception as ex:
+            # keep previous fullpath_best
+            pass
         mlflow.log_artifacts(msglogger.logdir)
 
     # Finally run results on the test set
-    test(test_loader, model, criterion, [pylogger], activations_collectors, args=args)
-
+    eval_params = {
+        "model_type": args.arch,
+        "model_path": raw_fullpath_best,
+        "dataset_path": args.data,
+        "label_path": "models/voc-model-labels.txt"
+    }
+    mlflow.projects.run(uri=".", entry_point="eval", use_conda=False, parameters=eval_params)
 
 OVERALL_LOSS_KEY = 'Overall Loss'
 CLASSIFICATION_LOSS_KEY = 'Classification Loss'
@@ -631,7 +640,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
     else:
         total_top1, total_top5, losses_exits_stats = earlyexit_validate_stats(args)
         return total_top1, total_top5, losses_exits_stats[args.num_exits-1]
-
 
 def update_training_scores_history(perf_scores_history, model, top1, top5, epoch, num_best_scores):
     """ Update the list of top training scores achieved so far, and log the best scores so far"""
