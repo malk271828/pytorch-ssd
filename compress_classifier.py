@@ -446,8 +446,21 @@ def train(train_loader, model, criterion, optimizer, epoch,
             # (e.g. add regularization loss)
             agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(regression_loss, classification_loss),
                                                                 optimizer=optimizer, return_loss_components=True)
-            loss = agg_loss.overall_loss
-            losses[OVERALL_LOSS_KEY].add(loss.item())
+            if isinstance(agg_loss.overall_loss, tuple):
+                loss = torch.zeros(1)
+                for l in agg_loss.overall_loss:
+                    loss += l.sum()
+
+                if CLASSIFICATION_LOSS_KEY not in losses.keys():
+                    losses[CLASSIFICATION_LOSS_KEY] = tnt.AverageValueMeter()
+                if LOCALIZATION_LOSS_KEY not in losses.keys():
+                    losses[LOCALIZATION_LOSS_KEY] = tnt.AverageValueMeter()
+                losses[OVERALL_LOSS_KEY].add(loss.item())
+                losses[CLASSIFICATION_LOSS_KEY].add(classification_loss.item())
+                losses[LOCALIZATION_LOSS_KEY].add(regression_loss.item())
+            else:
+                loss = agg_loss.overall_loss
+                losses[OVERALL_LOSS_KEY].add(loss.item())
 
             # Recored loss which is related to a compression scheduler
             for lc in agg_loss.loss_components:
