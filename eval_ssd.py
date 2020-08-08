@@ -210,8 +210,8 @@ if __name__ == '__main__':
         )
         aps.append(ap)
         print(f"{class_name}: {ap}")
-        mlflow.log_metric(ap, "Average Precision ({0})".format(class_name))
+        mlflow.log_metric("Average Precision ({0})".format(class_name), ap)
 
     mAP = sum(aps)/len(aps)
     print(f"\nAverage Precision Across All Classes:{mAP}")
-    mlflow.log_metric(mAP, "mean Average Precision")
+    mlflow.log_metric("mean Average Precision", mAP)

@@ -447,7 +447,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             agg_loss = compression_scheduler.before_backward_pass(epoch, train_step, steps_per_epoch, loss=(regression_loss, classification_loss),
                                                                 optimizer=optimizer, return_loss_components=True)
             if isinstance(agg_loss.overall_loss, tuple):
-                loss = torch.zeros(1)
+                loss = torch.zeros(1).to(args.device)
                 for l in agg_loss.overall_loss:
                     loss += l.sum()
 
