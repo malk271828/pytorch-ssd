@@ -13,7 +13,7 @@ import numpy as np
 import logging
 import sys
 from vision.ssd.mobilenet_v2_ssd_lite import create_mobilenetv2_ssd_lite, create_mobilenetv2_ssd_lite_predictor
-
+import mlflow
 
 parser = argparse.ArgumentParser(description="SSD Evaluation on VOC Dataset.")
 parser.add_argument('--net', default="vgg16-ssd",
@@ -210,8 +210,8 @@ if __name__ == '__main__':
         )
         aps.append(ap)
         print(f"{class_name}: {ap}")
+        mlflow.log_metric(ap, "Average Precision ({0})".format(class_name))
 
-    print(f"\nAverage Precision Across All Classes:{sum(aps)/len(aps)}")
-
-
-
+    mAP = sum(aps)/len(aps)
+    print(f"\nAverage Precision Across All Classes:{mAP}")
+    mlflow.log_metric(mAP, "mean Average Precision")
