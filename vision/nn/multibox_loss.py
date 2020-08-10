@@ -133,8 +133,7 @@ class MultiboxLoss(nn.Module):
                     confidence_log_prob = torch.nn.functional.log_softmax(confidence)
                     classification_loss = torch.gather(-confidence_log_prob, 2, one_hot_label)
 
-        if self.num_pos is None:
-            self.num_pos = gt_locations.size(0)
+        self.num_pos = gt_locations.size(0)
         if self.verbose > 0:
             print("num_pos:{0}".format(self.num_pos))
             self.showTensor(smooth_l1_loss, "smooth_l1_loss")
